@@ -13,3 +13,5 @@ wheels/
 .env
 credentials.json
 token.json
+alembic.ini
+alembic

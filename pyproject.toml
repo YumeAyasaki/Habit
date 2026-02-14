@@ -5,8 +5,13 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "alembic>=1.18.4",
     "google-api-python-client>=2.189.0",
     "google-auth-httplib2>=0.3.0",
     "google-auth-oauthlib>=1.2.4",
+    "pandas>=2.3.3",
+    "psycopg2-binary>=2.9.11",
     "python-dotenv>=1.0.1",
+    "sqlalchemy>=2.0.46",
+    "streamlit>=1.54.0",
 ]
