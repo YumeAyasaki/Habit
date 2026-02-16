@@ -16,3 +16,4 @@ token.json
 alembic.ini
 alembic
 snapshots
+logs
