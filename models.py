@@ -21,6 +21,7 @@ class Document(Base):
     # subject = Column(String, nullable=True)        # e.g., "Math", "Novel" – manual or inferred
     total_words = Column(Integer, default=0)
     last_synced = Column(DateTime, default=func.now())
+    last_revision_id = Column(String, nullable=True)  # To track changes since last sync
 
     folder = relationship("Folder", back_populates="documents")
     snapshots = relationship("DailySnapshot", back_populates="document")
@@ -32,7 +33,7 @@ class DailySnapshot(Base):
     document_id = Column(String, ForeignKey("documents.id"))
     date = Column(Date, nullable=False)
     total_words = Column(Integer, nullable=False)
-    words_added = Column(Integer, default=0)       # Net added that day
+    net_added = Column(Integer, default=0)       # Net added that day
     created_at = Column(DateTime, default=func.now())
 
     document = relationship("Document", back_populates="snapshots")
