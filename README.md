@@ -16,3 +16,7 @@ Step to do migrations:
 Step to drop database:
 1. Drop database with name (What do you expect?)
 2. (Optional) Probably clear and recreate the alembic folder to reset migration history. (rm -rf alembic)
+
+# About startup:
+1. crontab -e
+2. @reboot /whatever/path/you/put/those/startup_sync.sh
