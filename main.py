@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
-import os
 from datetime import date, timedelta
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import func
 from dotenv import load_dotenv
+import os
 
 # Import your DB setup (adjust paths if needed)
 from database import engine
@@ -16,11 +16,20 @@ st.set_page_config(layout="wide")
 # DB Session
 SessionLocal = sessionmaker(bind=engine)
 
+# Helper to build full path for a document
+def get_doc_path(db, doc):
+    path = doc.name
+    folder = db.get(Folder, doc.folder_id)
+    while folder:
+        path = f"{folder.name}/{path}"
+        folder = db.get(Folder, folder.parent_id)
+    return path
+
 # Cache queries for performance
 @st.cache_data(ttl=300)  # Refresh every 5 min
-def get_db_data(selected_date, selected_doc):
+def get_db_data(selected_date, selected_doc_id):
     with SessionLocal() as db:
-        doc_filter = Document.name == selected_doc if selected_doc != "All" else True
+        doc_filter = Document.id == selected_doc_id if selected_doc_id != "All" else True
 
         # Words Today: sum(net_added) on selected date
         words_today = db.query(func.sum(DailySnapshot.net_added)).filter(
@@ -49,9 +58,13 @@ def get_db_data(selected_date, selected_doc):
         trend_df = pd.DataFrame(trend_query.all(), columns=["date", "words"])
         trend_df = trend_df.set_index("date").reindex(pd.date_range(trend_start, selected_date)).fillna(0)
 
-        # Doc breakdown: current totals
-        doc_query = db.query(Document.name, Document.total_words).filter(doc_filter)
-        doc_df = pd.DataFrame(doc_query.all(), columns=["document", "words"])
+        # Doc breakdown: current totals, with paths
+        doc_query = db.query(Document.id, Document.name, Document.total_words, Document.folder_id).filter(doc_filter)
+        doc_data = []
+        for d_id, name, words, f_id in doc_query.all():
+            path = get_doc_path(db, Document(id=d_id, name=name, folder_id=f_id))
+            doc_data.append({"document": path, "words": words})
+        doc_df = pd.DataFrame(doc_data)
 
         # Streak: consecutive days back from selected_date with sum(net_added) >0 per day (no gaps)
         snapshots = db.query(DailySnapshot.date, func.sum(DailySnapshot.net_added).label('daily_added')).filter(
@@ -112,21 +125,26 @@ selected_date = st.sidebar.date_input(
     value=date.today()
 )
 
-# Dynamic doc options from DB
+# Dynamic doc options with full paths
 with SessionLocal() as db:
-    doc_options = ["All"] + sorted([d[0] for d in db.query(Document.name).distinct().all()])
+    docs = db.query(Document).all()
+    doc_options = {"All": "All"}
+    for doc in docs:
+        path = get_doc_path(db, doc)
+        doc_options[path] = doc.id
 
-selected_doc = st.sidebar.selectbox(
+selected_path = st.sidebar.selectbox(
     "Select document",
-    options=doc_options
+    options=list(doc_options.keys())
 )
+selected_doc_id = doc_options[selected_path]
 
 if st.sidebar.button("Run Sync Now"):
     os.system("python google_docs.py")  # Assumes google_docs.py in same dir; adjust if needed
     st.sidebar.success("Sync triggered!")
 
 # Fetch data
-data = get_db_data(selected_date, selected_doc)
+data = get_db_data(selected_date, selected_doc_id)
 
 # --------------------
 # MAIN HEADER
