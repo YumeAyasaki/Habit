@@ -122,23 +122,29 @@ def list_drive_files(service_drive, folder_id: str):
 
 
 def get_latest_revision_id(service_drive, doc_id: str) -> str | None:
-    """Cheap call – only returns the newest revision ID."""
+    """Fetch all revisions to reliably get the newest revision ID."""
+    revisions = []
+    page_token = None
     try:
-        response = service_drive.revisions().list(
-            fileId=doc_id,
-            pageSize=1,
-            fields="revisions(id)",
-        ).execute()
-        revisions = response.get("revisions", [])
-        return revisions[0]["id"] if revisions else None
+        while True:
+            response = service_drive.revisions().list(
+                fileId=doc_id,
+                fields="nextPageToken, revisions(id)",
+                pageToken=page_token,
+            ).execute()
+            revisions.extend(response.get("revisions", []))
+            page_token = response.get("nextPageToken")
+            if not page_token:
+                break
+        return revisions[-1]["id"] if revisions else None
     except HttpError as e:
         if e.resp.status in (403, 404):
             logging.warning(f"Revisions not accessible for doc {doc_id} (permission/trashed?)")
         else:
-            logging.error(f"Failed to fetch revision for {doc_id}: {e}")
+            logging.error(f"Failed to fetch revisions for {doc_id}: {e}")
         return None
     except Exception as e:
-        logging.error(f"Unexpected error fetching revision {doc_id}: {e}")
+        logging.error(f"Unexpected error fetching revisions {doc_id}: {e}")
         return None
 
 
