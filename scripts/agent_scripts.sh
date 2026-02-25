@@ -15,7 +15,7 @@ SCRIPT_DIR="$PROJECT_DIR/scripts"
 # Run to ensure database
 # Without logging for cleaner output
 echo "Running startup_sync.sh to ensure database is ready..."
-# "$SCRIPT_DIR/startup_sync.sh" > /dev/null 2>&1
+"$SCRIPT_DIR/startup_sync.sh" > /dev/null 2>&1
 
 # Activate virtual environment
 cd "$PROJECT_DIR" || { echo "Failed to cd to project dir" | tee -a "$LOG_FILE"; exit 1; }
