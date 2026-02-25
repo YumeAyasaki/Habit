@@ -97,10 +97,10 @@ def print_tree_with_changes(session, changed_paths, folder_map):
             if isinstance(item, Folder):
                 # Sum all changes in this folder's subtree for changed documents
                 folder_progress = get_progress(session, item)
-                print(f"{indent}{prefix}📁 {item.name}   ➕ Added: {folder_progress[0]} chars | ➖ Removed: {abs(folder_progress[1])} chars")
+                print(f"{indent}{prefix}📁 {item.name}   ➕ Added: {folder_progress[0]} words | ➖ Removed: {abs(folder_progress[1])} words")
             else:
                 # This is a document
-                print(f"{indent}{prefix}📄 {item.name}   ➕ Added: {doc_progress[0]} chars | ➖ Removed: {abs(doc_progress[1])} chars")
+                print(f"{indent}{prefix}📄 {item.name}   ➕ Added: {doc_progress[0]} words | ➖ Removed: {abs(doc_progress[1])} words")
         
         print()
 
