@@ -4,7 +4,6 @@ import logging
 import os
 from datetime import date, datetime
 from pathlib import Path
-
 from dotenv import load_dotenv
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow

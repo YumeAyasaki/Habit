@@ -5,7 +5,8 @@
 CONTAINER_NAME="habit-db"
 POSTGRES_USER="postgres"
 
-PROJECT_DIR="/home/yume_ayasaki/projects/habit"
+# Dynamic project dir
+PROJECT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 LOG_FILE="$PROJECT_DIR/logs/sync_startup_$(date +%Y%m%d_%H%M%S).log"
 
 echo "=== WSL Startup Sync Started at $(date) ===" | tee -a "$LOG_FILE"
@@ -55,15 +56,9 @@ if [ $timeout -le 0 ]; then
 fi
 
 # === Now safe to run your code ===
+# Activate virtual environment
 cd "$PROJECT_DIR" || { echo "Failed to cd to project dir" | tee -a "$LOG_FILE"; exit 1; }
-
-# Virtual env
-if [ -d ".venv" ]; then
-    echo "Activating virtual environment..." | tee -a "$LOG_FILE"
-    source ".venv/bin/activate"
-else
-    echo "No virtual environment found, proceeding without activation." | tee -a "$LOG_FILE"
-fi
+source "./scripts/activate_env.sh" "$PROJECT_DIR"
 
 echo "Running google_docs.py..." | tee -a "$LOG_FILE"
 python google_docs.py 2>&1 | tee -a "$LOG_FILE"
