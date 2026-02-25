@@ -13,7 +13,7 @@ from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseDownload
 
 from sqlalchemy.orm import sessionmaker
-from database import engine
+from database import engine, init_db
 from models import Folder, Document, DailySnapshot, RevisionEvent
 
 # ========================= CONFIG =========================
@@ -151,7 +151,8 @@ def get_latest_revision_id(service_drive, doc_id: str) -> str | None:
 def process_folder(
     service_drive, db, folder_id: str, parent_folder: Folder | None = None, indent: str = ""
 ) -> int:
-    # Folder bookkeeping
+    # ========================= FOLDER BOOKKEEPING =========================
+    # Always ensure the folder exists AND its parent link + name are correct
     folder = db.get(Folder, folder_id)
     if not folder:
         folder_name = "Root" if folder_id == FOLDER_ID else service_drive.files().get(
@@ -163,14 +164,32 @@ def process_folder(
             parent_id=parent_folder.id if parent_folder else None,
         )
         db.add(folder)
+        logging.info(f"{indent}✅ Created folder: {folder_name} (ID: {folder_id})")
     else:
+        updated = False
+
+        # Update name (skip root)
         if folder_id != FOLDER_ID:
             try:
-                new_name = service_drive.files().get(fileId=folder_id, fields="name").execute()["name"]
+                new_name = service_drive.files().get(
+                    fileId=folder_id, fields="name"
+                ).execute()["name"]
                 if new_name != folder.name:
                     folder.name = new_name
-            except Exception:
-                pass
+                    updated = True
+            except Exception as e:
+                logging.warning(f"Could not fetch name for folder {folder_id}: {e}")
+
+        expected_parent_id = parent_folder.id if parent_folder else None
+        if folder.parent_id != expected_parent_id:
+            folder.parent_id = expected_parent_id
+            updated = True
+
+        if updated:
+            logging.info(
+                f"{indent}🔄 Updated folder: {folder.name} (ID: {folder_id}) "
+                f"parent → {expected_parent_id}"
+            )
 
     total_words = 0
     items = list_drive_files(service_drive, folder_id)
@@ -186,15 +205,12 @@ def process_folder(
                     doc.name = item["name"]
                 doc.folder_id = folder_id
 
-            # === REVISION OPTIMIZATION ===
             current_rev_id = get_latest_revision_id(service_drive, item["id"])
 
             if doc.last_revision_id and current_rev_id == doc.last_revision_id:
-                # Unchanged – ultra-fast path
                 curr_words = doc.total_words or 0
                 logging.info(f"{indent}Document: {item['name']} - Unchanged (rev {current_rev_id})")
 
-                # Ensure today’s snapshot exists
                 today = date.today()
                 snapshot = db.query(DailySnapshot).filter_by(document_id=doc.id, date=today).first()
                 if not snapshot:
@@ -205,12 +221,10 @@ def process_folder(
                         net_added=0,
                     )
                     db.add(snapshot)
-
                 doc.last_synced = datetime.now()
                 total_words += curr_words
                 continue
 
-            # === CHANGED OR FIRST SYNC – full processing ===
             curr_text = get_document_text(service_drive, item["id"])
             curr_words = len(curr_text.split())
 
@@ -218,10 +232,9 @@ def process_folder(
             added, deleted = compute_diff(prev_text, curr_text)
             net = added - deleted
 
-            # Record the change with revision ID
             event = RevisionEvent(
                 document_id=doc.id,
-                revision_id=current_rev_id,          # ← utilizing your field
+                revision_id=current_rev_id,
                 timestamp=datetime.now(),
                 words_added=added,
                 words_deleted=deleted,
@@ -229,7 +242,6 @@ def process_folder(
             )
             db.add(event)
 
-            # Daily snapshot
             today = date.today()
             snapshot = db.query(DailySnapshot).filter_by(document_id=doc.id, date=today).first()
             if not snapshot:
@@ -246,17 +258,17 @@ def process_folder(
 
             doc.total_words = curr_words
             save_current_text(item["id"], curr_text)
-
-            # Update revision tracking
             doc.last_revision_id = current_rev_id
             doc.last_synced = datetime.now()
 
             total_words += curr_words
-            logging.info(f"{indent}Document: {item['name']} - Words: {curr_words} (Δ {net:+}, new rev {current_rev_id})")
+            logging.info(f"{indent}Document: {item['name']} - Words: {curr_words} (Δ {net:+}, rev {current_rev_id})")
 
         elif item["mimeType"] == "application/vnd.google-apps.folder":
-            logging.info(f"{indent}Folder: {item['name']}")
-            sub_total = process_folder(service_drive, db, item["id"], parent_folder=folder, indent=indent + "  ")
+            logging.info(f"{indent}📁 Folder: {item['name']}")
+            sub_total = process_folder(
+                service_drive, db, item["id"], parent_folder=folder, indent=indent + "  "
+            )
             total_words += sub_total
 
     return total_words
@@ -269,6 +281,7 @@ def main():
     creds = get_credentials()
     service_drive = build("drive", "v3", credentials=creds)
 
+    init_db()
     SessionLocal = sessionmaker(bind=engine)
     db = SessionLocal()
 

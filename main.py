@@ -7,11 +7,14 @@ from dotenv import load_dotenv
 import os
 
 # Import your DB setup (adjust paths if needed)
-from database import engine
+from database import engine, init_db
 from models import Document, DailySnapshot, Folder
 
 load_dotenv()
 st.set_page_config(layout="wide")
+
+# Initialize database if it doesn't exist
+init_db()
 
 # DB Session
 SessionLocal = sessionmaker(bind=engine)
